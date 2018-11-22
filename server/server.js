@@ -1,4 +1,6 @@
 const {ObjectID} = require('mongodb');
+const _ = require('lodash');
+const config = require('./config/config')[process.env.NODE_ENV || 'development'];
 const {mongoose} = require('./db/mongoose');
 const {Todo} = require('./models/todo');
 const {User} = require('./models/user');
@@ -8,7 +10,7 @@ const bodyParser = require('body-parser');
 
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = config.port;
 
 app.use(bodyParser.json());
 
@@ -37,15 +39,54 @@ app.get('/todos/:id', (req, res) => {
   const {id} = req.params;
 
   if(!ObjectID.isValid(id)) {
-    return res.status(400).send({message: 'Id is not valid'})
+    return res.status(400).send({message: 'Id is not valid'});
   }
   Todo.findById(id).then((todo) => {
     if(!todo) {
-      return res.status(400).send({message: 'Id is not found'})
+      return res.status(400).send({message: 'Id is not found'});
     }
     res.send({todo})
   }).catch((error) => {
     res.status(400).send({message: 'Error'})
+  })
+});
+
+app.delete('/todos/:id', (req, res) => {
+  const {id} = req.params;
+
+  if(!ObjectID.isValid(id)) {
+    return res.status(400).send({message: 'Id is not valid'});
+  }
+  Todo.findByIdAndDelete(id).then((todo) => {
+    if(!todo) {
+      return res.status(400).send({message: 'Id is not found'});
+    }
+    res.send({message: 'Delete success', todo});
+  }).catch((error) => {
+    res.status(400).send({message: 'Error'});
+  })
+});
+
+app.patch('/todos/:id', (req, res) => {
+  const {id} = req.params;
+  const body = _.pick(req.body, ['text', 'completed']);
+  if(_.isBoolean(body.completed) && body.completed) {
+    body.completedAt = new Date().getTime();
+  } else {
+    body.completed = false;
+    body.completedAt = null;
+  }
+
+  if(!ObjectID.isValid(id)) {
+    return res.status(400).send({message: 'Id is not valid'});
+  }
+  Todo.findByIdAndUpdate(id, {$set: body}, {new: true}).then((todo) => {
+    if(!todo) {
+      return res.status(400).send({message: 'Id is not found'});
+    }
+    res.send({message: 'Delete success', todo});
+  }).catch((error) => {
+    res.status(400).send({message: 'Error'});
   })
 });
 
