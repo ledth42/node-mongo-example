@@ -62,43 +62,46 @@ app.get('/todos/:id', authenticate, async (req, res) => {
   }
 });
 
-app.delete('/todos/:id', authenticate, (req, res) => {
-  const {id} = req.params;
+app.delete('/todos/:id', authenticate, async (req, res) => {
+  try {
+    const {id} = req.params;
 
-  if(!ObjectID.isValid(id)) {
-    return res.status(400).send({message: 'Id is not valid'});
-  }
-  Todo.findByIdAndDelete(id).then((todo) => {
+    if(!ObjectID.isValid(id)) {
+      return res.status(400).send({message: 'Id is not valid'});
+    }
+    const todo = await Todo.findByIdAndDelete(id);
     if(!todo) {
       return res.status(400).send({message: 'Id is not found'});
     }
     res.send({message: 'Delete success', todo});
-  }).catch((error) => {
-    res.status(400).send({message: 'Error'});
-  })
+  } catch (e) {
+    res.status(400).send({message: 'Error'})
+  }
 });
 
-app.patch('/todos/:id', authenticate, (req, res) => {
-  const {id} = req.params;
-  const body = _.pick(req.body, ['text', 'completed']);
-  if(_.isBoolean(body.completed) && body.completed) {
-    body.completedAt = new Date().getTime();
-  } else {
-    body.completed = false;
-    body.completedAt = null;
-  }
+app.patch('/todos/:id', authenticate, async (req, res) => {
+  try {
+    const {id} = req.params;
+    const body = _.pick(req.body, ['text', 'completed']);
+    if(_.isBoolean(body.completed) && body.completed) {
+      body.completedAt = new Date().getTime();
+    } else {
+      body.completed = false;
+      body.completedAt = null;
+    }
 
-  if(!ObjectID.isValid(id)) {
-    return res.status(400).send({message: 'Id is not valid'});
-  }
-  Todo.findByIdAndUpdate(id, {$set: body}, {new: true}).then((todo) => {
+    if(!ObjectID.isValid(id)) {
+      return res.status(400).send({message: 'Id is not valid'});
+    }
+    const todo = await Todo.findByIdAndUpdate(id, {$set: body}, {new: true});
     if(!todo) {
       return res.status(400).send({message: 'Id is not found'});
     }
     res.send({message: 'Delete success', todo});
-  }).catch((error) => {
-    res.status(400).send({message: 'Error'});
-  })
+
+  } catch (e) {
+    res.status(400).send({message: 'Error'})
+  }
 });
 
 // POST /users
