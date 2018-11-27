@@ -1,57 +1,68 @@
 const {ObjectID} = require('mongodb');
 const _ = require('lodash');
-const config = require('./config/config')[process.env.NODE_ENV || 'development'];
+require('./config/config');
 const {mongoose} = require('./db/mongoose');
 const {Todo} = require('./models/todo');
 const {User} = require('./models/user');
+const {authenticate} = require('./middleware/authenticate')
 
 const express = require('express');
 const bodyParser = require('body-parser');
 
 
 const app = express();
-const port = config.port;
+const port = process.env.PORT;
 
 app.use(bodyParser.json());
 
-app.post('/todos', (req, res) => {
-  const newTodo = new Todo({
-    text: req.body.text,
-  });
-  newTodo.save().then((doc) => {
-    res.send(doc);
-  }, (err) => {
-    res.status(400).send(err);
-  });
-});
+app.post('/todos', authenticate, async (req, res) => {
+  try {
 
-app.get('/todos', (req, res) => {
-  Todo.find().then((todos) => {
-    res.send({
-      todos
+    const newTodo = new Todo({
+      text: req.body.text,
+      _creator: req.user._id
     });
-  }, (err) => {
-    res.status(400).send(err);
-  });
+    const todo = await newTodo.save();
+    res.send(todo);
+  } catch (e) {
+    res.status(400).send(e);
+  }
 });
 
-app.get('/todos/:id', (req, res) => {
-  const {id} = req.params;
+app.get('/todos', authenticate, async (req, res) => {
+  try {
 
-  if(!ObjectID.isValid(id)) {
-    return res.status(400).send({message: 'Id is not valid'});
+    const todos = await Todo.find({
+      _creator: req.user._id
+    });
+    res.send({todos});
+  } catch (e) {
+    res.status(400).send(e);
   }
-  Todo.findById(id).then((todo) => {
+});
+
+app.get('/todos/:id', authenticate, async (req, res) => {
+  try {
+
+    const {id} = req.params;
+
+    if(!ObjectID.isValid(id)) {
+      return res.status(400).send({message: 'Id is not valid'});
+    }
+    const todo = await Todo.findOne({
+      _id: id,
+      _creator: req.user._id
+    });
     if(!todo) {
       return res.status(400).send({message: 'Id is not found'});
     }
     res.send({todo})
-  }).catch((error) => {
+  } catch (e) {
     res.status(400).send({message: 'Error'})
-  })
+  }
 });
 
-app.delete('/todos/:id', (req, res) => {
+app.delete('/todos/:id', authenticate, (req, res) => {
   const {id} = req.params;
 
   if(!ObjectID.isValid(id)) {
@@ -67,7 +78,7 @@ app.delete('/todos/:id', (req, res) => {
   })
 });
 
-app.patch('/todos/:id', (req, res) => {
+app.patch('/todos/:id', authenticate, (req, res) => {
   const {id} = req.params;
   const body = _.pick(req.body, ['text', 'completed']);
   if(_.isBoolean(body.completed) && body.completed) {
@@ -88,6 +99,44 @@ app.patch('/todos/:id', (req, res) => {
   }).catch((error) => {
     res.status(400).send({message: 'Error'});
   })
+});
+
+// POST /users
+app.post('/users/', async (req, res) => {
+  try {
+    const body = _.pick(req.body, ['email', 'password']);
+    const newUser = new User(body);
+    const user = await newUser.save();
+    const token = await user.generateAuthToken();
+    res.header('x-auth', token).send(user);
+  } catch (e) {
+    res.status(400).send(e);
+  }
+
+});
+
+app.get('/users/profile', authenticate, (req, res) => {
+  res.send(req.user);
+});
+
+app.post('/users/login', async (req, res) => {
+  try {
+    const body = _.pick(req.body, ['email', 'password']);
+    const user = await User.findByCredentials(body.email, body.password);
+    const token = await user.generateAuthToken();
+    res.header('x-auth', token).send(user);
+  } catch (e) {
+    res.status(400).send(e);
+  }
+});
+
+app.delete('/users/profile/token', authenticate, async (req, res) => {
+  try {
+    await req.user.removeToken(req.token);
+    res.status(200).send();
+  } catch (e) {
+    res.status(400).send(e);
+  }
 });
 
 app.listen(port, () => {
